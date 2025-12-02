@@ -1,5 +1,100 @@
 ---
-title: "Research"
+title: "Statistical Analysis of Anime Popularity Factors"
+author: "Solchanyk Vasyl, Dziuba Oksana, Kuryliak Danylo"
 output: html_document
 ---
 
+```{r setup, include=FALSE}
+library(tidyverse)
+theme_set(theme_minimal())
+```
+
+In this mini-research project we analyze factors that influence anime popularity and user ratings. We use the public Anime Recommendations Database from Kaggle, which contains metadata for \~12k anime titles and \~7.8M user–anime interactions. Our goal is to describe the data, understand basic patterns in ratings and popularity, and later test which factors (especially genre) are associated with higher mean ratings and more members.
+
+## Loading the data
+
+We load the anime metadata and user–item rating interactions from the Kaggle Anime Database. We remove unrated entries (rating = -1) and inspect the structure of both datasets to understand variable types and available information.
+
+```{r}
+anime <- read_csv("data/anime.csv")
+rating <- read_csv(
+  "data/rating.csv",
+  col_types = cols(
+    user_id  = col_integer(),
+    anime_id = col_integer(),
+    rating   = col_integer()
+  )
+)
+
+rating <- rating |> filter(rating != -1)
+
+anime |>
+  select(anime_id, name, genre, type, episodes, rating, members) |>
+  slice(1:10) |>
+  knitr::kable(caption = "Example rows from the anime dataset")
+
+rating |>
+  slice(1:10) |>
+  knitr::kable(caption = "Example rows from the user–anime rating dataset")
+
+vars <- tibble::tribble(
+  ~Variable,   ~Dataset, ~Type,      ~Description,
+  "anime_id",  "anime",  "integer",  "Unique identifier of an anime title",
+  "name",      "anime",  "character","Title of the anime",
+  "genre",     "anime",  "character","Comma-separated list of genres",
+  "type",      "anime",  "character","TV, Movie, OVA, etc.",
+  "episodes",  "anime",  "character","Number of episodes",
+  "rating",    "anime",  "double",   "Mean user rating (1–10)",
+  "members",   "anime",  "double",   "Number of users who added the anime",
+  "user_id",   "rating", "integer",  "Unique user identifier",
+  "rating",    "rating", "integer",  "User’s rating for this anime"
+)
+
+knitr::kable(vars, caption = "Variables used in the analysis")
+```
+
+## **Distribution of mean ratings**
+
+The histogram of mean ratings shows the overall shape of the rating distribution. This helps identify whether the ratings are symmetric, skewed, tightly clustered, or widely spread.
+
+```{r}
+ggplot(anime, aes(x = rating)) +
+  geom_histogram(bins = 30) +
+  labs(
+    title = "Distribution of Anime Mean Ratings",
+    x = "Mean rating",
+    y = "Count"
+  )
+```
+
+## Distribution of popularity (members)
+
+Popularity is strongly right-skewed, so we use a log scale for clarity. This confirms that a small number of anime dominate in viewership, while most titles have modest audience sizes.
+
+```{r}
+ggplot(anime, aes(x = members)) +
+  geom_histogram(bins = 40) +
+  scale_x_log10() +
+  labs(
+    title = "Popularity Distribution (log scale)",
+    x = "Members (log10)",
+    y = "Count"
+  )
+```
+
+## Genre comparison - TOP 10
+
+We convert multi-genre strings into individual genre entries and compute the average rating per genre. Displaying only the top ten genres makes the comparison interpretable and highlights which categories tend to receive higher user ratings.
+
+```{r}
+top10 <- genre_summary |> slice_max(mean_rating, n = 10)
+
+ggplot(top10, aes(x = reorder(genre, mean_rating), y = mean_rating)) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Top 10 Genres by Mean Rating",
+    x = "Genre",
+    y = "Mean rating"
+  )
+```

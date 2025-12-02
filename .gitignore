@@ -1,5 +1,28 @@
-.Rproj.user
+.DS_Store
+data/.DS_Store
+.AppleDouble
+.LSOverride
+
+
+# RStudio/R project files
 .Rhistory
 .RData
+.Rproj.user/
 .Ruserdata
+
+# R markdown and cache
+*_cache/
+cache/
+*.utf8.md
+*.knit.md
+
+# Large datasets
 data/rating.csv
+data/rating/*
+
+# Temporary / generated files
+*.tmp
+*.log
+
+# Project-specific
+*.html
