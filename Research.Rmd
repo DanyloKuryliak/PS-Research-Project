@@ -98,3 +98,186 @@ ggplot(top10, aes(x = reorder(genre, mean_rating), y = mean_rating)) +
     y = "Mean rating"
   )
 ```
+
+## Hypothesis 1 (Does the average rating differ between genres?)
+
+```{r}
+# car: Levene's test for equal variances
+# FSA: Dunn's test after Kruskal–Wallis
+library(car)
+library(FSA)
+```
+
+## Step 1: Prepare a single-genre variable and keep only rows with a valid rating
+
+```{r}
+anime_h1 <- anime |>
+  filter(!is.na(rating)) |>
+  mutate(
+    main_genre = str_split(genre, ", ") |>                
+      map_chr(1) |>                                       
+      as.factor()                                         
+  )
+
+# Filter to keep only genres with sufficient observations (n >= 10)
+genre_counts <- anime_h1 |>
+  group_by(main_genre) |>
+  summarise(n = n()) |>
+  filter(n >= 10)
+
+anime_h1_filtered <- anime_h1 |>
+  filter(main_genre %in% genre_counts$main_genre)
+
+cat("Data prepared: ", nrow(anime_h1_filtered), "observations across", 
+    length(unique(anime_h1_filtered$main_genre)), "genres\n")
+```
+
+## Step 2: Check normality of ratings within each main_genre using KS tests
+
+```{r}
+ks_results <- anime_h1_filtered |>
+  group_by(main_genre) |>
+  summarise(
+    n = n(),
+    ks_p = ks.test(rating, "pnorm", mean = mean(rating), sd = sd(rating))$p.value,
+    .groups = "drop"
+  ) |>
+  mutate(normality_violated = ks_p < 0.05)
+
+normality_violations <- mean(ks_results$normality_violated)
+cat("Normality: ", round(normality_violations * 100, 1), 
+    "% of genres violate normality (KS test p < 0.05)\n")
+```
+
+Using Kolmogorov–Smirnov tests on mean ratings within each main genre, we found that several large genres (e.g., Action, Adventure, Comedy) have p‑values below 0.05, indicating noticeable deviations from normality and motivating the use of a non‑parametric robustness check alongside ANOVA.
+
+## Step 3: Check homogeneity of variances using Levene's test
+
+```{r}
+levene_result <- leveneTest(rating ~ main_genre, data = anime_h1_filtered)
+cat("Equal variances: Levene's test p =", 
+    format(levene_result$`Pr(>F)`[1], scientific = TRUE), "\n")
+
+if (levene_result$`Pr(>F)`[1] < 0.05) {
+  cat("Conclusion: Variances are NOT equal across genres → ANOVA assumption violated\n")
+} else {
+  cat("Conclusion: Variances appear equal across genres\n")
+}
+```
+
+**What this means:**\
+Both key assumptions for ANOVA are violated. Therefore, **ANOVA results would be unreliable**.
+
+**What tests we should use instead:**
+
+1.  **Kruskal-Wallis test** - Non-parametric version of ANOVA (compares medians/ranks instead of means)
+
+2.  **Dunn's post-hoc test** - For pairwise comparisons after Kruskal-Wallis
+
+3.  **Welch's ANOVA** - An alternative ANOVA that doesn't assume equal variances
+
+```{r}
+if (normality_violations > 0.3 || levene_result$`Pr(>F)`[1] < 0.05) {
+  cat("\nDecision: Use Kruskal-Wallis test (non-parametric)\n")
+  cat("Reason: Violated assumptions (non-normality and/or unequal variances)\n")
+} else {
+  cat("\nDecision: Use ANOVA (parametric)\n")
+  cat("Reason: Assumptions reasonably met\n")
+}
+```
+
+## **Step 4: Run the Kruskal-Wallis Test**
+
+```{r}
+kruskal_result <- kruskal.test(rating ~ main_genre, data = anime_h1_filtered)
+
+cat("\nKruskal-Wallis Test Results:\n")
+cat("H-statistic =", round(kruskal_result$statistic, 2), "\n")
+cat("p-value =", format(kruskal_result$p.value, scientific = TRUE), "\n")
+
+# Effect size
+H <- kruskal_result$statistic
+k <- length(unique(anime_h1_filtered$main_genre))
+N <- nrow(anime_h1_filtered)
+epsilon_sq <- (H - k + 1) / (N - k)
+cat("Effect size (ε²) =", round(epsilon_sq, 4), "\n")
+
+# Hypothesis decision
+alpha <- 0.05
+if (kruskal_result$p.value < alpha) {
+  cat("\nConclusion: REJECT H₀ - Ratings differ significantly across genres\n")
+} else {
+  cat("\nConclusion: FAIL TO REJECT H₀ - No significant difference in ratings across genres\n")
+}
+```
+
+## Step 5: Post-hoc analysis
+
+```{r}
+if (kruskal_result$p.value < alpha) {
+  dunn_result <- dunnTest(rating ~ main_genre, 
+                         data = anime_h1_filtered,
+                         method = "bonferroni")
+  
+  significant_comparisons <- dunn_result$res |>
+    filter(P.adj < 0.05)
+  
+  cat("\nPost-hoc (Dunn's test):", nrow(significant_comparisons), 
+      "significant pairwise comparisons found\n")
+  
+  if (nrow(significant_comparisons) > 0) {
+    # Show top 5 most significant comparisons
+    cat("\nTop 5 most significant genre differences:\n")
+    significant_comparisons |>
+      arrange(P.adj) |>
+      mutate(`Adj. p` = format(P.adj, scientific = TRUE, digits = 2)) |>
+      select(Comparison, Z, `Adj. p`) |>
+      slice_head(n = 5) |>
+      knitr::kable(row.names = FALSE, digits = 3)
+  }
+}
+```
+
+## **Hypothesis 1: Results Summary**
+
+### **Test Conducted:**
+
+-   **Null Hypothesis (H₀):** Mean ratings are equal across all genres
+
+-   **Alternative Hypothesis (H₁):** At least one genre pair shows significant difference in mean ratings
+
+### **Assumption Checks:**
+
+-   Normality: 12.5% of genres violate normality (KS test p \< 0.05)
+
+-   Equal variances: **NOT equal** across genres (Levene's test p = 3.9e-41)
+
+-   **Decision:** Use Kruskal-Wallis non-parametric test
+
+### **Test Results:**
+
+-   Kruskal-Wallis H-statistic = 1525.5
+
+-   **p-value = 1.46e-302** (highly significant)
+
+-   Effect size ε² = 0.1244 (medium effect)
+
+### **Conclusion:**
+
+**REJECT H0** - Ratings differ significantly across genres
+
+### **Post-hoc Analysis (Dunn's test):**
+
+-   Many significant pairwise comparisons found
+
+-   **Top example:** Action vs Kids (Z = 21.81, p = 8.7e-103)
+
+-   Other significant differences: Action-Dementia, Dementia-Drama, Adventure-Dementia, Drama-Kids
+
+### **Interpretation:**
+
+1.  **Statistical significance:** Strong evidence that genre affects ratings
+
+2.  **Practical significance:** Medium effect size suggests meaningful differences
+
+3.  **Key finding:** Certain genres (like Action) tend to have systematically different ratings than others (like Kids)
