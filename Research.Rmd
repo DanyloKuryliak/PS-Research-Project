@@ -5,6 +5,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
+if (!require("tidyverse")) install.packages("tidyverse")
 library(tidyverse)
 theme_set(theme_minimal())
 ```
@@ -43,7 +44,7 @@ vars <- tibble::tribble(
   "name",      "anime",  "character","Title of the anime",
   "genre",     "anime",  "character","Comma-separated list of genres",
   "type",      "anime",  "character","TV, Movie, OVA, etc.",
-  "episodes",  "anime",  "character","Number of episodes",
+  "episodes",  "anime",  "integer","Number of episodes",
   "rating",    "anime",  "double",   "Mean user rating (1–10)",
   "members",   "anime",  "double",   "Number of users who added the anime",
   "user_id",   "rating", "integer",  "Unique user identifier",
@@ -58,13 +59,15 @@ knitr::kable(vars, caption = "Variables used in the analysis")
 The histogram of mean ratings shows the overall shape of the rating distribution. This helps identify whether the ratings are symmetric, skewed, tightly clustered, or widely spread.
 
 ```{r}
-ggplot(anime, aes(x = rating)) +
-  geom_histogram(bins = 30) +
+ggplot(anime %>% filter(!is.na(rating)), aes(x = rating)) +
+  geom_histogram(bins = 35, fill = "steelblue", alpha = 0.8) +
   labs(
     title = "Distribution of Anime Mean Ratings",
+    subtitle = paste("N =", sum(!is.na(anime$rating)), "anime with ratings"),
     x = "Mean rating",
     y = "Count"
-  )
+  ) +
+  theme_minimal()
 ```
 
 ## Distribution of popularity (members)
@@ -72,14 +75,16 @@ ggplot(anime, aes(x = rating)) +
 Popularity is strongly right-skewed, so we use a log scale for clarity. This confirms that a small number of anime dominate in viewership, while most titles have modest audience sizes.
 
 ```{r}
-ggplot(anime, aes(x = members)) +
-  geom_histogram(bins = 40) +
+ggplot(anime %>% filter(!is.na(members), members > 0), aes(x = members)) +
+  geom_histogram(bins = 50, fill = "darkgreen", alpha = 0.7) +
   scale_x_log10() +
   labs(
     title = "Popularity Distribution (log scale)",
-    x = "Members (log10)",
+    subtitle = paste("N =", sum(!is.na(anime$members) & anime$members > 0), "anime with membership data"),
+    x = "Members (log10 scale)",
     y = "Count"
-  )
+  ) +
+  theme_minimal()
 ```
 
 ## Genre comparison - TOP 10
@@ -87,16 +92,33 @@ ggplot(anime, aes(x = members)) +
 We convert multi-genre strings into individual genre entries and compute the average rating per genre. Displaying only the top ten genres makes the comparison interpretable and highlights which categories tend to receive higher user ratings.
 
 ```{r}
-top10 <- genre_summary |> slice_max(mean_rating, n = 10)
+genre_summary <- anime %>%
+  filter(!is.na(rating), !is.na(genre), genre != "") %>%
+  separate_rows(genre, sep = ", ") %>%
+  group_by(genre) %>%
+  summarise(
+    mean_rating = mean(rating, na.rm = TRUE),
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  filter(n >= 30)
+
+top10 <- genre_summary |> 
+  arrange(desc(mean_rating)) |> 
+  slice_head(n = 10)
 
 ggplot(top10, aes(x = reorder(genre, mean_rating), y = mean_rating)) +
-  geom_col() +
+  geom_col(fill = "coral", alpha = 0.8) +
+  geom_text(aes(label = sprintf("%.2f", mean_rating)), 
+            hjust = 1.1, color = "white", size = 3.5) +
   coord_flip() +
   labs(
     title = "Top 10 Genres by Mean Rating",
+    subtitle = "Minimum 30 anime per genre",
     x = "Genre",
     y = "Mean rating"
-  )
+  ) +
+  theme_minimal()
 ```
 
 ## Hypothesis 1 (Does the average rating differ between genres?)
@@ -104,20 +126,29 @@ ggplot(top10, aes(x = reorder(genre, mean_rating), y = mean_rating)) +
 ```{r}
 # car: Levene's test for equal variances
 # FSA: Dunn's test after Kruskal–Wallis
+if (!require("car")) install.packages("car")
+if (!require("FSA")) install.packages("FSA")
+if (!require("knitr")) install.packages("knitr")
+
 library(car)
 library(FSA)
+library(knitr)
+
+cat("Packages loaded successfully for Hypothesis 1 analysis.\n")
 ```
 
 ## Step 1: Prepare a single-genre variable and keep only rows with a valid rating
 
 ```{r}
-anime_h1 <- anime |>
-  filter(!is.na(rating)) |>
+anime_h1 <- anime %>%
+  filter(!is.na(rating), !is.na(genre), genre != "") %>%  # Видаляємо пусті жанри
   mutate(
-    main_genre = str_split(genre, ", ") |>                
-      map_chr(1) |>                                       
-      as.factor()                                         
-  )
+    main_genre = str_split(genre, ", ") %>%
+      map_chr(~ if(length(.x) > 0) .x[1] else NA_character_) %>%
+        as.factor()
+    ) %>%
+  filter(!is.na(main_genre)) 
+
 
 # Filter to keep only genres with sufficient observations (n >= 10)
 genre_counts <- anime_h1 |>
