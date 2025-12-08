@@ -35,21 +35,27 @@ cat("- lmtest: Breusch-Pagan test for heteroscedasticity\n")
 cat("- MASS: robust regression\n")
 ```
 
-## **1. Introduction**
+# **1. Introduction**
 
-Based on our Interim Report, this research project analyzes factors influencing anime popularity and user ratings using the public **Anime Recommendations Database** from Kaggle. The dataset consists of:
+## **1.1 Research Background**
 
--   **anime.csv**: Metadata for 12,294 anime titles
+This research project analyzes factors influencing anime popularity using the publicly available **Anime Recommendations Database** from Kaggle. The dataset consists of metadata for 12,294 anime titles and approximately 7.8 million user ratings.
+
+## **1.2 Research Objectives**
+
+1.  Test whether anime ratings differ systematically across genres (**Hypothesis** **1**)
+
+2.  Examine the relationship between popularity and mean ratings (**Hypothesis 2**)
+
+## **1.3 Dataset Description**
+
+-   **anime.csv**: Metadata for 12,294 anime titles including genre, type, episodes, rating, and members count
 
 -   **rating.csv**: \~7.8 million user-anime interactions from 73,516 users
 
-## Research Objectives
+# **2. Data Loading and Preparation**
 
-1.  Test whether anime ratings differ systematically across genres (Hypothesis 1)
-
-2.  Examine the relationship between popularity and mean ratings (Hypothesis 2)
-
-## **2. Loading the data**
+## **2.1 Loading Data**
 
 We load the anime metadata and user–item rating interactions from the Kaggle Anime Database. We remove unrated entries (rating = -1) and inspect the structure of both datasets to understand variable types and available information.
 
@@ -73,7 +79,11 @@ rating <- read_csv(
 )
 
 rating <- rating |> filter(rating != -1)
+```
 
+## **2.2 Data Structure**
+
+```{r}
 anime |>
   dplyr::select(anime_id, name, genre, type, episodes, rating, members) |>
   slice(1:10) |>
@@ -99,9 +109,9 @@ vars <- tibble::tribble(
 knitr::kable(vars, caption = "Variables used in the analysis")
 ```
 
-## **3. Descriptive Analysis**
+# **3. Descriptive Analysis**
 
-### **3.1 Dataset Statistics**
+## **3.1 Dataset Statistics**
 
 ```{r}
 desc_stats <- anime %>%
@@ -118,18 +128,14 @@ desc_stats <- anime %>%
     median_members = median(members, na.rm = TRUE),
     .groups = "drop"
   )
-```
 
-## Dataset Overview
-
-```{r}
 cat("Total anime titles:", desc_stats$n_titles, "\n")
 cat("Anime with ratings:", desc_stats$n_with_ratings, 
     paste0("(", round(desc_stats$n_with_ratings/desc_stats$n_titles*100, 1), "%)\n"))
 cat("Anime with membership data:", desc_stats$n_with_members, "\n\n")
 ```
 
-## Rating Statistics
+## **3.2 Dataset Statistics**
 
 ```{r}
 cat("Mean rating:", round(desc_stats$mean_rating, 2), "\n")
@@ -154,7 +160,7 @@ knitr::kable(stats_table, caption = "Descriptive Statistics of Key Variables")
 
 ```
 
-### **3.2 Distribution of Ratings**
+## **3.3 Distribution of Ratings**
 
 The histogram of mean ratings shows the overall shape of the rating distribution. This helps identify whether the ratings are symmetric, skewed, tightly clustered, or widely spread.
 
@@ -170,7 +176,7 @@ ggplot(anime %>% filter(!is.na(rating)), aes(x = rating)) +
   theme_minimal()
 ```
 
-### **3.3 Distribution of Popularity (Members)**
+## **3.4 Distribution of Popularity (Members)**
 
 Popularity is strongly right-skewed, so we use a log scale for clarity. This confirms that a small number of anime dominate in viewership, while most titles have modest audience sizes.
 
@@ -187,7 +193,7 @@ ggplot(anime %>% filter(!is.na(members), members > 0), aes(x = members)) +
   theme_minimal()
 ```
 
-### **3.4 Relationship between Popularity and Rating**
+## **3.5 Relationship between Popularity and Rating**
 
 ```{r}
 options(warn = -1)
@@ -212,7 +218,7 @@ cor_test <- cor.test(
 )
 ```
 
-### **3.5 Correlation alanisys**
+## **3.6 Correlation alanisys**
 
 ```{r}
 cat("Pearson correlation between log(members) and rating:\n")
@@ -222,52 +228,19 @@ cat("95% CI: [", round(cor_test$conf.int[1], 3), ",",
 cat("p-value:", ifelse(cor_test$p.value < 0.001, "< 0.001", 
                       round(cor_test$p.value, 4)), "\n")
 
-options(warn = 0)
 ```
 
-## **4. Hypothesis 1: Genre Differences in Ratings  (Does the average rating differ between genres?)**
+# **4. Hypothesis 1: Genre Differences in Ratings (Does the average rating differ between genres?)**
 
-### **4.1 Formal Hypotheses**
+## **4.1 Formal Hypotheses**
 
 -   **H₀:** $μ₁ = μ₂ = ... = μₖ$ (All genre means are equal)
 
 -   **H₁:** $∃ i,j: μᵢ ≠ μⱼ$ (At least one genre pair differs)
 
-### **4.2 Data Preparation for Genre Analysis**
+## **4.2 Data Preparation for Genre Analysis**
 
 We convert multi-genre strings into individual genre entries and compute the average rating per genre. Displaying only the top ten genres makes the comparison interpretable and highlights which categories tend to receive higher user ratings.
-
-```{r}
-options(warn = -1)
-
-genre_summary <- anime %>%
-  filter(!is.na(rating), !is.na(genre), genre != "") %>%
-  separate_rows(genre, sep = ", ") %>%
-  group_by(genre) %>%
-  summarise(
-    mean_rating = mean(rating, na.rm = TRUE),
-    n = n(),
-    .groups = "drop"
-  ) %>%
-  filter(n >= 30)
-
-top10 <- genre_summary |> 
-  arrange(desc(mean_rating)) |> 
-  slice_head(n = 10)
-
-ggplot(top10, aes(x = reorder(genre, mean_rating), y = mean_rating)) +
-  geom_col(fill = "coral", alpha = 0.8) +
-  geom_text(aes(label = sprintf("%.2f", mean_rating)), 
-            hjust = 1.1, color = "white", size = 3.5) +
-  coord_flip() +
-  labs(
-    title = "Top 10 Genres by Mean Rating",
-    subtitle = "Minimum 30 anime per genre",
-    x = "Genre",
-    y = "Mean rating"
-  ) +
-  theme_minimal()
-```
 
 ### STRATEGY: Dominant Genre Analysis
 
@@ -280,12 +253,6 @@ anime_prepared <- anime %>%
     genre_list = str_split(genre, ", "),
     genre_count = sapply(genre_list, length)
   )
-```
-
-## Initial Dataset
-
-```{r}
-cat("Total anime with valid genre and rating:", nrow(anime_prepared), "\n")
 
 genre_frequency <- anime_prepared %>%
   unnest(genre_list) %>%
@@ -297,17 +264,13 @@ genre_frequency <- anime_prepared %>%
   arrange(desc(frequency))
 
 top_genres <- head(genre_frequency$genre, 15)
-cat("\nSelected top 15 genres for dominant genre assignment:\n")
-cat(paste(top_genres, collapse = ", "), "\n")
 
 assign_dominant_genre <- function(genre_vector) {
-  # Find first genre that is in top-15 list
   for (genre in genre_vector) {
     if (genre %in% top_genres) {
       return(genre)
     }
   }
-  # If none found, use first genre
   return(genre_vector[1])
 }
 
@@ -322,29 +285,37 @@ anime_h1_filtered <- anime_with_dominant %>%
   ungroup() %>%
   mutate(main_genre = as.factor(dominant_genre)) %>%
   dplyr::select(-genre_list, -dominant_genre)
+
+cat("Total anime for analysis:", nrow(anime_h1_filtered), "\n")
+cat("Number of genres analyzed:", length(unique(anime_h1_filtered$main_genre)), "\n")
 ```
 
-## Final Dataset for Hypothesis 1 Analysis
+## **4.3 Assumption Testing**
 
-```{r}
-cat("Total anime:", nrow(anime_h1_filtered), "\n")
-cat("Number of dominant genres:", length(unique(anime_h1_filtered$main_genre)), "\n")
+### **4.3.1 Normality Test (Kolmogorov-Smirnov)**
 
-# Show top genres
-genre_counts <- anime_h1_filtered %>%
-  group_by(main_genre) %>%
-  summarise(
-    n = n(),
-    mean_rating = mean(rating),
-    .groups = "drop"
-  ) %>%
-  arrange(desc(n))
+#### **Kolmogorov-Smirnov Test**
 
-cat("\nTop 10 genres by number of anime:\n")
-print(head(genre_counts, 10))
-```
+**Purpose:** Tests whether a sample comes from a specified distribution (we use it to test for normality).
 
-### **4.3 Assumption Checking. Check normality of ratings within each main_genre using KS tests**
+**Theoretical Background:** The KS test compares the empirical distribution function (EDF) of the sample with the cumulative distribution function (CDF) of the reference distribution (normal distribution in our case). The test statistic D represents the maximum vertical distance between these two functions.
+
+-   Null hypothesis (H₀): The data follow the specified distribution
+
+-   Test statistic: $D = \sup_{x} |F_n(x) - F(x)|$\
+    where:
+
+    -   \$F_n(x) \$ = empirical distribution function: $F_n(x) = \frac{1}{n} \sum_{i=1}^{n} I_{[-\infty, x]}(X_i)$
+
+    -   $F(x)$ = theoretical cumulative distribution function (normal distribution in our case)
+
+    -   $\sup$ = supremum (maximum distance)
+
+-   The test statistic D follows the Kolmogorov distribution under H₀
+
+-   Critical values depend on sample size and significance level (α = 0.05)
+
+**When to use:** When we need to check the normality assumption before using parametric tests like ANOVA. Particularly useful for large sample sizes where graphical methods may be insufficient.
 
 ```{r}
 safe_ks_test <- function(x) {
@@ -383,7 +354,7 @@ normality_summary <- ks_results %>%
   )
 ```
 
-## Normality Assessment (Kolmogorov-Smirnov Test)
+#### **4.3.1.1 Normality Assessment (Kolmogorov-Smirnov)**
 
 ```{r}
 cat("Total genres analyzed:", normality_summary$total_genres, "\n")
@@ -421,40 +392,58 @@ ggplot(ks_results %>% filter(!is.na(ks_p)),
 
 Using Kolmogorov–Smirnov tests on mean ratings within each main genre, we found that several large genres (e.g., Action, Adventure, Comedy) have p‑values below 0.05, indicating noticeable deviations from normality and motivating the use of a non‑parametric robustness check alongside ANOVA.
 
-### **4.4 Check homogeneity of variances using Levene's test**
+### **4.3.2 Homogeneity of Variances (Levene's Test)**
+
+#### **Levene's Test**
+
+**Purpose:** Tests the equality of variances across groups (homoscedasticity).
+
+**Theoretical Background:** Levene's test is an alternative to Bartlett's test that is less sensitive to departures from normality. Instead of comparing variances directly, it transforms the data by taking absolute deviations from group centers (means or medians), then performs an ANOVA on these transformed values.
+
+-   Null hypothesis (H₀): $\sigma_1^2 = \sigma_2^2 = \cdots = \sigma_k^2$
+
+-   Transform data: $z_{ij} = |y_{ij} - \bar{y}_j|$ where $\bar{y}_j$ is the mean or median of group j
+
+-   Perform ANOVA on $z_{ij}$
+
+-   Test statistic: $W = \frac{(N-k)}{(k-1)} \cdot \frac{\sum_{j=1}^{k} n_j(\bar{z}j - \bar{z})^2}{\sum{j=1}^{k} \sum_{i=1}^{n_j} (z_{ij} - \bar{z}_j)^2}$\
+    where:
+
+    -   $N$ = total sample size
+
+    -   $k$ = number of groups
+
+    -   $n_j$ = sample size of group j
+
+    -   $\bar{z}_j$ = mean of transformed values in group j
+
+    -   $\bar{z}$ = overall mean of transformed values
+
+-   The test statistic W follows an F-distribution with (k-1, N-k) degrees of freedom
+
+**When to use:** To check the homogeneity of variances assumption before ANOVA. Particularly robust when data are not normally distributed.
+
+## 
 
 ```{r}
 levene_result <- leveneTest(rating ~ main_genre, data = anime_h1_filtered)
+
+cat("Homogeneity of Variances Assessment:\n")
+cat("- Test statistic (F):", round(levene_result$`F value`[1], 3), "\n")
+cat("- p-value:", 
+    ifelse(levene_result$`Pr(>F)`[1] < 0.001, "< 0.001", 
+           sprintf("%.6f", levene_result$`Pr(>F)`[1])), "\n")
+
+if (levene_result$`Pr(>F)`[1] < 0.05) {
+  cat("- Conclusion: Variances are NOT equal across genres\n")
+} else {
+  cat("- Conclusion: Variances are equal across genres\n")
+}
 ```
 
-## Homogeneity of Variances Assessment (Levene's Test)
+#### **4.3.2.1 Variances assessment (Levene's Test)**
 
 ```{r}
-cat("Test statistic (F):", round(levene_result$`F value`[1], 3), "\n")
-cat("Degrees of freedom:", 
-    paste(levene_result$Df[1], levene_result$Df[2], sep = ", "), "\n")
-cat("p-value:", 
-    ifelse(levene_result$`Pr(>F)`[1] < 0.001, 
-           "< 0.001", 
-           sprintf("%.4f", levene_result$`Pr(>F)`[1])), "\n\n")
-
-ggplot(anime_h1_filtered, aes(x = main_genre, y = rating)) +
-  geom_boxplot(aes(fill = main_genre), outlier.alpha = 0.3) +
-  stat_summary(fun = mean, geom = "point", shape = 23, size = 3, fill = "white") +
-  labs(
-    title = "Rating Distribution by Genre",
-    subtitle = paste("Levene's test: F =", round(levene_result$`F value`[1], 2),
-                    ", p", ifelse(levene_result$`Pr(>F)`[1] < 0.001, "< 0.001", 
-                                 sprintf("= %.3f", levene_result$`Pr(>F)`[1]))),
-    x = "Genre",
-    y = "Rating",
-    fill = "Genre"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.position = "none") +
-  scale_fill_viridis_d(option = "C", alpha = 0.7)
-
 variance_summary <- anime_h1_filtered %>%
   group_by(main_genre) %>%
   summarise(
@@ -464,11 +453,7 @@ variance_summary <- anime_h1_filtered %>%
     .groups = "drop"
   ) %>%
   arrange(desc(variance))
-```
 
-## Variance Summary by Genre
-
-```{r}
 cat("Range of variances:", 
     round(min(variance_summary$variance), 3), "-", 
     round(max(variance_summary$variance), 3), "\n")
@@ -494,127 +479,68 @@ ggplot(variance_summary, aes(x = reorder(main_genre, variance), y = variance)) +
   scale_fill_viridis_c(option = "B", direction = -1)
 ```
 
-### **4.5 Statistical Test Selection**
+## **4.4 Statistical Test Selection**
 
-Both key assumptions for ANOVA are violated. Therefore, **ANOVA results would be unreliable**.
+Since both normality and homogeneity of variances assumptions are violated, we select the **Kruskal-Wallis test** as our primary analysis method.
 
-**What tests we should use instead:**
+**Rationale:**
 
-1.  **Kruskal-Wallis test** - Non-parametric version of ANOVA (compares medians/ranks instead of means)
+1.  $14.3%$ of genres violate normality assumption
 
-2.  **Dunn's post-hoc test** - For pairwise comparisons after Kruskal-Wallis
+2.  Levene's test shows unequal variances $(p < 0.001)$
 
-3.  **Welch's ANOVA** - An alternative ANOVA that doesn't assume equal variances
+3.  Kruskal-Wallis is a non-parametric test that doesn't require these assumptions
 
-```{r}
-percent_violating_normality <- normality_summary$percent_violating / 100
-```
+### **4.5 Primary Analysis: Kruskal-Wallis Test**
 
-## Decision on Statistical Test Selection
+#### **Kruskal-Wallis Test**
 
-```{r}
-cat("Percentage of genres violating normality:", percent_violating_normality * 100, "%\n")
-cat("Levene's test p-value:", levene_result$`Pr(>F)`[1], "\n")
+**Purpose:** Non-parametric alternative to one-way ANOVA for comparing three or more groups.
 
-if (percent_violating_normality > 0.3 || levene_result$`Pr(>F)`[1] < 0.05) {
-  cat("\nDecision: Use Kruskal-Wallis test (non-parametric)\n")
-  cat("Reason: Statistical assumptions are violated:\n")
-  cat("- Normality:", round(percent_violating_normality * 100, 1), "% of genres violate normality\n")
-  cat("- Equal variances: Levene's test p =", format(levene_result$`Pr(>F)`[1], scientific = TRUE), "(p < 0.05)\n")
-  cat("\nRationale: When ANOVA assumptions are violated, Kruskal-Wallis provides\n")
-  cat("a robust non-parametric alternative that compares median ranks instead of means.\n")
-} else {
-  cat("\nDecision: Use ANOVA (parametric)\n")
-  cat("Reason: Assumptions are reasonably met\n")
-}
-```
+**Theoretical Background:** The Kruskal-Wallis test ranks all observations from all groups together, then compares the sum of ranks between groups. If the null hypothesis is true (all groups have the same distribution), the average ranks should be similar across groups.
 
-## Enhanced Normality Assessment
+-   Null hypothesis (H₀): The distributions of all groups are identical
 
-```{r}
+-   Test statistic: $H = \frac{12}{N(N+1)} \sum_{j=1}^{k} \frac{R_j^2}{n_j} - 3(N+1)$\
+    where:
 
-top_6_genres <- genre_counts %>%
-  arrange(desc(n)) %>%
-  slice_head(n = 6) %>%
-  pull(main_genre)
+    -   $N$ = total number of observations
 
-cat("Creating diagnostic plots for top 6 genres by sample size:\n")
-cat(paste(top_6_genres, collapse = ", "), "\n\n")
+    -   $k$ = number of groups
 
-# Create Q-Q plots
-qq_plots <- list()
-for (i in 1:length(top_6_genres)) {
-  genre_data <- anime_h1_filtered %>%
-    filter(main_genre == top_6_genres[i]) %>%
-    pull(rating)
-  
-  qq_data <- data.frame(x = genre_data)
-  
-  qq_plots[[i]] <- ggplot(qq_data, aes(sample = x)) +
-    stat_qq(size = 1.5, alpha = 0.6) +
-    stat_qq_line(color = "red", linetype = "dashed") +
-    labs(
-      title = paste(top_6_genres[i], 
-                   "\n(n =", length(genre_data), ")"),
-      x = "Theoretical Quantiles",
-      y = "Sample Quantiles"
-    ) +
-    theme_minimal(base_size = 10) +
-    theme(plot.title = element_text(size = 10, face = "bold"))
-}
+    -   $R_j$ = sum of ranks in group j
 
-grid.arrange(grobs = qq_plots, ncol = 3,
-             top = "Q-Q Plots for Normality Check (Top 6 Genres by Sample Size)")
+    -   $n_j$ = number of observations in group j
 
-hist_plots <- list()
-for (i in 1:length(top_6_genres)) {
-  genre_data <- anime_h1_filtered %>%
-    filter(main_genre == top_6_genres[i])
-  
-  mean_val <- mean(genre_data$rating, na.rm = TRUE)
-  sd_val <- sd(genre_data$rating, na.rm = TRUE)
-  
-  hist_plots[[i]] <- ggplot(genre_data, aes(x = rating)) +
-    geom_histogram(aes(y = ..density..), 
-                   bins = 30, fill = "green", alpha = 0.7) +
-    stat_function(fun = dnorm, 
-                  args = list(mean = mean_val, sd = sd_val),
-                  color = "red", size = 1, linetype = "dashed") +
-    labs(
-      title = paste(top_6_genres[i], 
-                   "\nμ =", round(mean_val, 2), 
-                   ", σ =", round(sd_val, 2)),
-      x = "Rating",
-      y = "Density"
-    ) +
-    theme_minimal(base_size = 10)
-}
+-   For large samples, H approximately follows a χ² distribution with (k-1) degrees of freedom
 
-grid.arrange(grobs = hist_plots, ncol = 3,
-             top = "Histograms with Normal Distribution Overlay")
-```
+-   For small samples, exact critical values are used
 
-## **4.6 Run the Kruskal-Wallis Test**
+**When to use:** When data are ordinal or when assumptions of normality and homogeneity of variances are violated. Also appropriate for skewed distributions or when outliers are present.
+
+## **4.6 Primary Analysis: Kruskal-Wallis Test**
 
 ```{r}
 kruskal_result <- kruskal.test(rating ~ main_genre, data = anime_h1_filtered)
 ```
 
-## Kruskal-Wallis Test Results
+### **4.6.1 Kruskal-Wallis Test Results**
 
 ```{r}
-cat("Test statistic (H):", round(kruskal_result$statistic, 2), "\n")
-cat("Degrees of freedom:", kruskal_result$parameter, "\n")
-cat("p-value:", 
-    ifelse(kruskal_result$p.value < 0.001, 
-           "< 0.001", 
-           sprintf("%.4f", kruskal_result$p.value)), "\n")
+cat("Kruskal-Wallis Test Results:\n")
+cat("- Test statistic (H):", round(kruskal_result$statistic, 2), "\n")
+cat("- Degrees of freedom:", kruskal_result$parameter, "\n")
+cat("- p-value:", 
+    ifelse(kruskal_result$p.value < 0.001, "< 0.001", 
+           sprintf("%.6f", kruskal_result$p.value)), "\n")
 
+# Calculate effect size (epsilon-squared)
 H <- kruskal_result$statistic
 k <- length(unique(anime_h1_filtered$main_genre))
 N <- nrow(anime_h1_filtered)
 epsilon_sq <- (H - k + 1) / (N - k)
 
+# Function to interpret epsilon-squared
 interpret_epsilon <- function(epsilon_sq) {
   if (epsilon_sq < 0.01) return("negligible")
   else if (epsilon_sq < 0.06) return("small")
@@ -623,187 +549,55 @@ interpret_epsilon <- function(epsilon_sq) {
 }
 
 effect_interpretation <- interpret_epsilon(epsilon_sq)
+
+cat("\nEffect Size Analysis:\n")
+cat("- Epsilon-squared (ε²):", round(epsilon_sq, 4), "\n")
+cat("- Interpretation:", effect_interpretation, "effect\n")
+cat("- Variance explained by genre:", round(epsilon_sq * 100, 1), "%\n")
 ```
 
-## Effect Size Analysis
+## **4.7 Hypothesis Decision**
 
 ```{r}
-cat("Epsilon-squared (ε²):", round(epsilon_sq, 4), "\n")
-cat("Interpretation:", effect_interpretation, "effect\n")
-cat("Proportion of variance explained by genre:", round(epsilon_sq * 100, 1), "%\n")
-
 alpha <- 0.05
-```
-
-## Hypothesis Decision
-
-```{r}
 if (kruskal_result$p.value < alpha) {
-  cat("Since p-value", 
-      ifelse(kruskal_result$p.value < 0.001, "< 0.001", 
-             sprintf("= %.4f", kruskal_result$p.value)),
-      "is less than α = 0.05:\n")
-  cat("REJECT the null hypothesis (H₀)\n")
-  cat("There is sufficient evidence that ratings differ across genres\n")
+  cat("\n**Decision: REJECT H₀**\n")
+  cat("There is sufficient statistical evidence that ratings differ across genres.\n")
 } else {
-  cat("Since p-value =", sprintf("%.4f", kruskal_result$p.value),
-      "is greater than α = 0.05:\n")
-  cat("FAIL TO REJECT the null hypothesis (H₀)\n")
-  cat("There is insufficient evidence that ratings differ across genres\n")
+  cat("\n**Decision: FAIL TO REJECT H₀**\n")
+  cat("There is insufficient evidence that ratings differ across genres.\n")
 }
-
-genre_medians <- anime_h1_filtered %>%
-  group_by(main_genre) %>%
-  summarise(
-    median_rating = median(rating),
-    mean_rating = mean(rating),
-    n = n(),
-    .groups = "drop"
-  ) %>%
-  arrange(desc(median_rating))
-
-ggplot(genre_medians %>% slice_head(n = 15), 
-       aes(x = reorder(main_genre, median_rating), y = median_rating)) +
-  geom_col(aes(fill = median_rating), alpha = 0.8) +
-  geom_text(aes(label = sprintf("%.2f", median_rating)), 
-            hjust = 1.1, color = "white", size = 4) +
-  coord_flip() +
-  labs(
-    title = "Top 15 Genres by Median Rating",
-    subtitle = paste("Kruskal-Wallis: H =", round(kruskal_result$statistic, 2),
-                    ifelse(kruskal_result$p.value < 0.001, ", p < 0.001",
-                           paste(", p =", round(kruskal_result$p.value, 4)))),
-    x = "Genre",
-    y = "Median Rating",
-    fill = "Median\nRating"
-  ) +
-  theme_minimal() +
-  scale_fill_viridis_c(option = "D", direction = -1)
-
 ```
 
-## **4.7 ANOVA (in this case is incorrect, but we will use it for comparison)**
+## **4.8 Post-hoc Analysis: Dunn's Test with Bonferroni Correction**
 
-```{r}
+#### **Dunn's Test with Bonferroni Correction**
 
-anova_result <- aov(rating ~ main_genre, data = anime_h1_filtered)
-anova_summary <- summary(anova_result)
-```
+**Purpose:** Post-hoc pairwise comparisons after a significant Kruskal-Wallis test.
 
-## Standard ANOVA Results
+**Theoretical Background:** Dunn's test performs pairwise comparisons using rank sums to identify which specific groups differ. The Bonferroni correction adjusts significance levels to control the family-wise error rate when conducting multiple comparisons.
 
-```{r}
-cat("Test statistic (F):", round(anova_summary[[1]]$`F value`[1], 3), "\n")
-cat("Degrees of freedom:", 
-    paste(anova_summary[[1]]$Df[1], anova_summary[[1]]$Df[2], sep = ", "), "\n")
-cat("p-value:", 
-    ifelse(anova_summary[[1]]$`Pr(>F)`[1] < 0.001, 
-           "< 0.001", 
-           sprintf("%.6f", anova_summary[[1]]$`Pr(>F)`[1])), "\n")
-```
+-   For each pairwise comparison between groups i and j:
 
-## **4.8 Welch's ANOVA (Does Not Assume Equal Variances, for comparison)**
+    -   $z_{ij} = \frac{\bar{R}_i - \bar{R}j}{\sqrt{\frac{N(N+1)}{12} - \frac{\sum{s=1}^{t} (t_s^3 - t_s)}{12(N-1)}} \cdot \sqrt{\frac{1}{n_i} + \frac{1}{n_j}}}$\
+        where:
 
-```{r}
-welch_anova <- oneway.test(rating ~ main_genre, 
-                          data = anime_h1_filtered, 
-                          var.equal = FALSE)
+    -   $\bar{R}_i = R_i/n_i$ = average rank in group i
 
-cat("Test statistic (F):", round(welch_anova$statistic, 3), "\n")
-cat("Degrees of freedom (approx):", 
-    round(welch_anova$parameter[1], 1), "(numerator),",
-    round(welch_anova$parameter[2], 1), "(denominator)\n")
-cat("p-value:", 
-    ifelse(welch_anova$p.value < 0.001, 
-           "< 0.001", 
-           sprintf("%.6f", welch_anova$p.value)), "\n")
-```
+    -   $t_s$ = number of observations tied at rank s
 
-## **4.9 Comparison of All Tests**
+    -   $t$ = number of tied ranks
 
-```{r}
-comparison_table <- data.frame(
-  Test = c("Standard ANOVA", "Welch's ANOVA", "Kruskal-Wallis"),
-  Assumption = c("Equal variances + Normality", "Normality only", "None (non-parametric)"),
-  Statistic = c("F", "F", "H"),
-  Statistics_value = c(
-    round(anova_summary[[1]]$`F value`[1], 2),
-    round(welch_anova$statistic, 2),
-    round(kruskal_result$statistic, 2)
-  ),
-  P_value = c(
-    ifelse(anova_summary[[1]]$`Pr(>F)`[1] < 0.001, "<0.001", 
-           round(anova_summary[[1]]$`Pr(>F)`[1], 4)),
-    ifelse(welch_anova$p.value < 0.001, "<0.001", round(welch_anova$p.value, 4)),
-    ifelse(kruskal_result$p.value < 0.001, "<0.001", round(kruskal_result$p.value, 4))
-  ),
-  Decision = c(
-    ifelse(anova_summary[[1]]$`Pr(>F)`[1] < 0.05, "Reject H₀", "Fail to reject"),
-    ifelse(welch_anova$p.value < 0.05, "Reject H₀", "Fail to reject"),
-    ifelse(kruskal_result$p.value < 0.05, "Reject H₀", "Fail to reject")
-  )
-)
+-   The z-statistic follows approximately a standard normal distribution
 
-print(comparison_table)
-```
+-   **Bonferroni correction:** Adjusts α level for m comparisons: $\alpha_{adj} = \frac{\alpha}{m}$\
+    where m = number of pairwise comparisons = $\frac{k(k-1)}{2}$
 
-## Sensitivity Analysis: Does Genre Count Affect Results?
-
-### Robustness Check: Single vs Multi-genre Anime
-
-```{r}
-temp_data <- anime_h1_filtered %>%
-  left_join(
-    anime %>% 
-      dplyr::select(anime_id, genre) %>%  # FIXED: Use dplyr::select
-      mutate(
-        genre_count = str_count(genre, ", ") + 1,
-        is_single_genre = genre_count == 1
-      ),
-    by = "anime_id"
-  )
-
-single_genre <- temp_data %>% filter(is_single_genre)
-multi_genre <- temp_data %>% filter(!is_single_genre)
-
-cat("Number of single-genre anime:", nrow(single_genre), "\n")
-cat("Number of multi-genre anime:", nrow(multi_genre), "\n")
-
-cat("\nComparison of mean ratings:\n")
-cat("- Single-genre anime:", round(mean(single_genre$rating, na.rm = TRUE), 2), "\n")
-cat("- Multi-genre anime:", round(mean(multi_genre$rating, na.rm = TRUE), 2), "\n")
-
-if (nrow(single_genre) > 0 && nrow(multi_genre) > 0) {
-  genre_count_test <- wilcox.test(single_genre$rating, multi_genre$rating)
-  cat("- Wilcoxon test p-value:", 
-      ifelse(genre_count_test$p.value < 0.001, "<0.001", 
-             round(genre_count_test$p.value, 4)), "\n")
-}
-
-comparison_plot <- temp_data %>%
-  mutate(group = ifelse(is_single_genre, "Single-genre", "Multi-genre")) %>%
-  ggplot(aes(x = group, y = rating, fill = group)) +
-  geom_boxplot(alpha = 0.7) +
-  labs(
-    title = "Rating Comparison: Single vs Multi-genre Anime",
-    x = "Genre Count",
-    y = "Rating",
-    fill = "Number of Genres"
-  ) +
-  theme_minimal() +
-  scale_fill_brewer(palette = "Set2")
-
-print(comparison_plot)
-
-cat("\nConclusion: This check confirms that our dominant genre approach is reasonable.\n")
-cat("The difference between single and multi-genre anime is minimal.\n")
-```
-
-### **4.10 Post-hoc Analysis (Dunn's Test)**
+**When to use:** To identify which specific groups differ after obtaining a significant Kruskal-Wallis result. The Bonferroni correction is conservative and controls Type I error at the expense of reduced power.
 
 ```{r}
 if (kruskal_result$p.value < 0.05) {
-  cat("## Post-hoc Analysis (Dunn's Test with Bonferroni Correction)\n")
+  cat("\n## Post-hoc Analysis (Dunn's Test with Bonferroni Correction)\n")
   cat("Since the Kruskal-Wallis test was significant, we perform pairwise\n")
   cat("comparisons to identify which specific genres differ.\n\n")
   
@@ -926,165 +720,69 @@ if (kruskal_result$p.value < 0.05) {
   }
   
 } else {
-  cat("Post-hoc analysis not performed because Kruskal-Wallis test was not significant.\n")
+  cat("\nPost-hoc analysis not performed because Kruskal-Wallis test was not significant.\n")
 }
 ```
 
-# **5. HYPOTHESIS 1: COMPREHENSIVE SUMMARY**
-
-==============================================================
-
-## **5.0 RESEARCH QUESTION**
-
-Do anime ratings differ systematically across different genres?
-
-## **5.1 STATISTICAL HYPOTHESES**
-
--   $H₀: μ₁ = μ₂ = ... = μₖ$ (All genre means are equal)
--   $H₁: ∃ i,j: μᵢ ≠ μⱼ$ (At least one genre pair differs)
-
-## **5.2 METHODOLOGY**
-
-### Data Preparation
-
--   Initial dataset: $12017$ anime with valid genre and rating
--   Filtered dataset: $11903$ anime (minimum $30$ per genre)
--   Genres analyzed: $21$
--   Dominant genre assignment: First genre from top-15 list
-
-### Assumption Testing
-
-1.  **Normality (Kolmogorov-Smirnov):**
-    -   Tested each genre separately $(n ≥ 5)$
-    -   $14.3%$ of genres violate normality $(p < 0.05)$
-    -   Large genres (Action, Adventure, Comedy) show significant deviations
-2.  **Homogeneity of Variances (Levene's test):**
-    -   $F(20, 11882) = 12.68$
-    -   $p = < 0.001$
-    -   Conclusion: Variances are not equal across genres
-
-### Test Selection Rationale
-
-Since both ANOVA assumptions are violated:
-
-1\. Normality violations in $14.3%$ of genres
-
-2\. Unequal variances (Levene's $p < 0.05$)
-
-**Selected test: Kruskal-Wallis (non-parametric alternative to ANOVA)**
-
-## **5.3 RESULTS**
-
-### Primary Test: Kruskal-Wallis
-
--   H-statistic = $1489.51$
--   Degrees of freedom = $20$
--   p-value = $< 0.001$
-
-### Effect Size
-
--   Epsilon-squared $(ε²) = 0.1237$
--   Interpretation: medium effect
--   Variance explained by genre: $12.4%$
+## **4.9 Sensitivity Analysis**
 
 ```{r}
-cat("Hypothesis 1 Results:\n")
-cat("- Kruskal-Wallis test: H =", round(kruskal_result$statistic, 2), 
-    ", p-value", ifelse(kruskal_result$p.value < 0.001, "< 0.001", 
-                       round(kruskal_result$p.value, 4)), "\n")
-cat("- Effect size (ε²):", round(epsilon_sq, 4), 
-    "(", effect_interpretation, "effect)\n")
-cat("- Most extreme difference: Action vs Kids (|Z| =", 
-    round(abs(dunn_result$res$Z[which.max(abs(dunn_result$res$Z))]), 1), ")\n")
+# Compare single-genre vs multi-genre anime
+temp_data <- anime_h1_filtered %>%
+  left_join(
+    anime %>% 
+      dplyr::select(anime_id, genre) %>%
+      mutate(
+        genre_count = str_count(genre, ", ") + 1,
+        is_single_genre = genre_count == 1
+      ),
+    by = "anime_id"
+  )
+
+single_genre <- temp_data %>% filter(is_single_genre)
+multi_genre <- temp_data %>% filter(!is_single_genre)
+
+cat("Sensitivity Analysis - Single vs Multi-genre Anime:\n")
+cat("- Single-genre anime:", nrow(single_genre), "\n")
+cat("- Multi-genre anime:", nrow(multi_genre), "\n")
+cat("- Mean rating difference:", 
+    round(mean(multi_genre$rating, na.rm = TRUE) - mean(single_genre$rating, na.rm = TRUE), 3), "\n")
+
+if (nrow(single_genre) > 0 && nrow(multi_genre) > 0) {
+  genre_count_test <- wilcox.test(single_genre$rating, multi_genre$rating)
+  cat("- Wilcoxon test p-value:", 
+      ifelse(genre_count_test$p.value < 0.001, "<0.001", 
+             round(genre_count_test$p.value, 4)), "\n")
+}
 ```
 
-## **5.4 Statistical Decision**
+## **4.10 Summary of Findings for Hypothesis 1**
 
-**REJECT H₀** $(p < 0.001 < α = 0.05)$ There is sufficient statistical evidence that ratings differ across genres.
+1.  **Statistical Significance:** Kruskal-Wallis test shows significant differences $(H = 1489.51, p < 0.001)$
 
-## **5.5 Post-hoc Analysis (Dunn's Test)**
+2.  **Effect Size:** Medium effect ( $ε² = 0.124, 12.4%$ variance explained)
 
--   Total comparisons: $210$
--   Significant pairs (p.adj $< 0.05$): $97$ (46.2%)
--   Strongest difference: **Action** vs **Kids** $(|Z| = 21.9)$
+3.  **Highest-rated Genre:** Action (median = 6.88)
 
-## **5.6 Descriptive Findings**
+4.  **Lowest-rated Genre:** Music (median = 5.84)
 
-**Most common genres (by number of anime titles):**
+5.  **Most Common Genre:** Comedy (3151 titles)
 
-1\. **Comedy**: 3151 titles (6.49 avg rating) \
-2. **Action**: 2768 titles (6.79 avg rating) \
-3. **Adventure**: 1445 titles (6.69 avg rating) \
-4. **Drama**: 994 titles (6.79 avg rating) \
-5. **Hentai**: 982 titles (6.2 avg rating)
+# **5. Hypothesis 2: Relationship between Popularity and Rating**
 
-**Highest-rated genres (by median rating):**
+## **5.1 Research Question and Hypotheses**
 
-1\. **Action**: 6.88 (n = 2768) \
-2. **Shounen**: 6.86 (n = 75) \
-3. **Drama**: 6.81 (n = 994)
+**Research Question:** Is there a significant linear relationship between anime popularity and mean ratings?
 
-**Lowest-rated genres (by median rating):**
+**Formal Hypotheses:**
 
-1\. **Music**: 5.84 (n = 447) \
-2. **Kids**: 5.62 (n = 450) \
-3. **Dementia**: 4.65 (n = 150)
+-   $H₀: β₁ = 0$ (No significant linear relationship)
 
-**Rating difference:** Highest (Action) is 2.23 points higher than lowest (Music)
+-   $H₁: β₁ ≠ 0$ (Significant linear relationship exists)\\
 
-## **5.7 Genre Popularity Insights**
-
--   Top 5 genres account for 78.5% of all anime (9340/11903 titles)
--   Most common genre: **Comedy** (3151 titles, 26.5% of dataset)
-
-## **5.8 LIMITATIONS**
-
-1.  **Simplified genre assignment:** Multi-genre anime represented by single dominant genre
-2.  **Unequal sample sizes:** Some genres have substantially more titles than others
-3.  **Confounding variables:** Year, studio, budget, and episode count not controlled for
-4.  **Platform bias:** Ratings from MyAnimeList may not represent all anime viewers
-5.  **Cultural context:** Results may be specific to this dataset's demographic
-
-## **5.9 PRACTICAL IMPLICATIONS**
-
-1.  **For viewers:** Genre can serve as a useful indicator of likely enjoyment
-2.  **For creators:** Understanding genre expectations may help in targeting audiences
-3.  **For platforms:** Genre-based recommendations could improve user experience
-4.  **For researchers:** Genre is a meaningful variable in anime quality studies
-
-## **5.10 KEY TAKEAWAYS**
-
-**Statistical significance:** Genre has a statistically significant effect on ratings
-
-**Effect size:** medium effect (12.4% variance explained) \
-**Practical relevance:** Meaningful for practical applications \
-**Genre hierarchy:** Clear ranking of genres by median rating exists \
-**Example contrast:** Action rates significantly higher than Music \
-**Most common genres:** Comedy, Action, Adventure
-
-====================================================================
-
-# **6. Hypothesis 2: Relationship between Popularity and Rating**
-
-====================================================================
-
-### **6.1 Formal Hypotheses**
-
--   $H₀: β₁ = 0$ (no significant linear relationship between popularity and rating)
--   $H₁: β₁ ≠ 0$ (significant linear relationship exists)
--   Significance level: $α = 0.05$
-
-**Methodology (as per Interim Report):**
-
-1.  Logarithmic transformation of membership counts to address right-skew
-2.  Simple linear regression: $ratingᵢ = β₀ + β₁·log₁₀(membersᵢ) + εᵢ$
-3.  Diagnostic checks: residual normality, homoscedasticity, influential observations
-4.  Model fit assessment using $R²$
-
-## Data Preparation for Hypothesis 2
+## **5.2 Data Preparation**
 
 ```{r}
-
 regression_data <- anime %>%
   filter(!is.na(rating), 
          !is.na(members), 
@@ -1092,78 +790,108 @@ regression_data <- anime %>%
          rating > 0) %>%
   mutate(log_members = log10(members))
 
-cat("Initial dataset size:", nrow(anime), "anime titles\n")
-cat("After filtering (valid rating and members):", nrow(regression_data), "titles\n")
-cat("Percentage of data used:", 
-    round(nrow(regression_data)/nrow(anime)*100, 1), "%\n\n")
+cat("Dataset for regression analysis:\n")
+cat("- Initial dataset:", nrow(anime), "anime titles\n")
+cat("- After filtering:", nrow(regression_data), "titles\n")
+cat("- Percentage used:", round(nrow(regression_data)/nrow(anime)*100, 1), "%\n")
 ```
 
-### **6.2 Linear Regression Model**
+## **5.3 Correlation Analysis**
+
+#### **Pearson Correlation Coefficient**
+
+**Purpose:** Measures the strength and direction of linear relationship between two continuous variables.
+
+**Theoretical Background:** The Pearson correlation coefficient measures the degree to which two variables vary together, standardized by their individual variances.
+
+-   $r  = \frac{\sum_{i=1}^{n}(x_i - \bar{x})(y_i -  \bar{y})}{\sqrt{\sum_{i=1}^{n}(x_i - \bar{x})^2 \sum_{i=1}^{n}(y_i -  \bar{y})^2}}$
+
+-   Range: $-1 ≤ r ≤ 1$
+
+    -   r = 1: perfect positive linear relationship
+
+    -   r = -1: perfect negative linear relationship
+
+    -   r = 0: no linear relationship
+
+-   Test statistic: $t = r\sqrt{\frac{n-2}{1-r^2}}$ follows t-distribution with (n-2) df
+
+-   Confidence interval: $r \pm z_{\alpha/2} \sqrt{\frac{1-r^2}{n-3}}$ (using Fisher's z-transformation)
+
+**When to use:** To quantify linear association between two continuous, normally distributed variables.
 
 ```{r}
+cor_test <- cor.test(regression_data$log_members, regression_data$rating)
 
+cat("Pearson Correlation Analysis:\n")
+cat("- Correlation coefficient (r):", round(cor_test$estimate, 3), "\n")
+cat("- 95% Confidence Interval: [", 
+    round(cor_test$conf.int[1], 3), ",", 
+    round(cor_test$conf.int[2], 3), "]\n")
+cat("- p-value:", 
+    ifelse(cor_test$p.value < 0.001, "< 0.001", 
+           sprintf("%.6f", cor_test$p.value)), "\n")
+cat("- Interpretation:", 
+    if (abs(cor_test$estimate) >= 0.7) "Strong correlation"
+    else if (abs(cor_test$estimate) >= 0.3) "Moderate correlation"
+    else "Weak correlation", "\n")
+```
+
+## **5.4 Linear Regression Analysis**
+
+#### **Simple Linear Regression**
+
+**Purpose:** Models the relationship between a dependent variable and one or more independent variables.
+
+**Theoretical Background:** Ordinary least squares (OLS) regression finds the line that minimizes the sum of squared vertical distances between observed and predicted values.
+
+-   Model: $y_i = \beta_0 + \beta_1 x_i + \epsilon_i$
+
+-   Parameter estimation (OLS):
+
+    -   $\hat{\beta}1 = \frac{\sum{i=1}^{n}(x_i - \bar{x})(y_i - \bar{y})}{\sum_{i=1}^{n}(x_i - \bar{x})^2}$
+
+    -   $\hat{\beta}_0 = \bar{y} - \hat{\beta}_1 \bar{x}$
+
+-   Standard errors:
+
+    -   $SE(\hat{\beta}1) = \sqrt{\frac{MSE}{\sum{i=1}^{n}(x_i - \bar{x})^2}}$
+
+    -   $MSE = \frac{SSE}{n-2} = \frac{\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}{n-2}$
+
+-   Coefficient of determination: $R^2 = \frac{SSR}{SST} = 1 - \frac{SSE}{SST}$\
+    where SSR = regression sum of squares, SSE = error sum of squares, SST = total sum of squares
+
+**When to use:** To predict or explain the relationship between variables, assuming linearity, independence, homoscedasticity, and normality of residuals.
+
+```{r}
 lm_model <- lm(rating ~ log_members, data = regression_data)
 summary_lm <- summary(lm_model)
-```
 
-Model: $ratingᵢ = β₀ + β₁·log₁₀(membersᵢ) + εᵢ$
-
-**Parameter Estimates:**
-
-```{r}
 coef_table <- summary_lm$coefficients
-cat("Intercept (β₀):", round(coef_table[1, 1], 4), 
-    " (SE =", round(coef_table[1, 2], 4), ")\n")
-cat("Slope (β₁):", round(coef_table[2, 1], 4), 
-    " (SE =", round(coef_table[2, 2], 4), ")\n\n")
+beta1 <- coef(lm_model)[2]  # Store beta1 for visualization
+
+cat("Linear Regression Results:\n")
+cat("- Model: rating = β₀ + β₁·log₁₀(members) + ε\n")
+cat("- Intercept (β₀):", round(coef(lm_model)[1], 4), 
+    " (SE =", round(summary_lm$coefficients[1,2], 4), ")\n")
+cat("- Slope (β₁):", round(coef(lm_model)[2], 4), 
+    " (SE =", round(summary_lm$coefficients[2,2], 4), ")\n")
+cat("- t-statistic for β₁:", round(summary_lm$coefficients[2,3], 4), "\n")
+cat("- p-value for β₁:", 
+    ifelse(summary_lm$coefficients[2,4] < 0.001, "< 0.001", 
+           sprintf("%.6f", summary_lm$coefficients[2,4])), "\n")
+cat("- R² =", round(summary_lm$r.squared, 4), 
+    sprintf("(%.1f%% of variance explained)", round(summary_lm$r.squared*100, 1)), "\n\n")
+
+cat("Interpretation:\n")
+cat("- For each 1-unit increase in log₁₀(members), rating increases by", 
+    round(coef(lm_model)[2], 3), "points\n")
+cat("- A 10-fold increase in popularity corresponds to", 
+    round(coef(lm_model)[2], 3), "points higher rating\n")
 ```
 
-**Statistical Significance:**
-
-```{r}
-cat("t-statistic for β₁:", round(coef_table[2, 3], 4), "\n")
-cat("p-value for β₁:", 
-    ifelse(coef_table[2, 4] < 0.001, "< 0.001", 
-           sprintf("%.6f", coef_table[2, 4])), "\n\n")
-
-# Confidence interval
-conf_int <- confint(lm_model, level = 0.95)
-cat("**95% Confidence Interval for β₁:**\n")
-cat(sprintf("[%.4f, %.4f]", conf_int[2, 1], conf_int[2, 2]), "\n\n")
-```
-
-**Model Fit:**
-
-```{r}
-cat("R² =", round(summary_lm$r.squared, 4), 
-    sprintf("(%.1f%% of variance explained)", round(summary_lm$r.squared * 100, 1)), "\n")
-cat("Adjusted R² =", round(summary_lm$adj.r.squared, 4), "\n")
-cat("Residual Standard Error:", round(summary_lm$sigma, 4), "\n")
-cat("F-statistic:", round(summary_lm$fstatistic[1], 2), 
-    "on", round(summary_lm$fstatistic[2]), "and", 
-    round(summary_lm$fstatistic[3]), "DF\n")
-cat("Overall p-value:", 
-    ifelse(pf(summary_lm$fstatistic[1], summary_lm$fstatistic[2], 
-              summary_lm$fstatistic[3], lower.tail = FALSE) < 0.001, 
-           "< 0.001", 
-           sprintf("%.6f", pf(summary_lm$fstatistic[1], 
-                             summary_lm$fstatistic[2], 
-                             summary_lm$fstatistic[3], 
-                             lower.tail = FALSE))), "\n\n")
-```
-
-## Interpretation
-
-```{r}
-beta1 <- coef(lm_model)[2]
-cat("For each 1-unit increase in log₁₀(members), the rating increases by", 
-    round(beta1, 3), "points on average.\n")
-cat("In practical terms: A 10-fold increase in popularity (members) corresponds to", 
-    round(beta1, 3), "points higher rating.\n\n")
-
-```
-
-## Visualizing the Relationship
+### **Visualizing the Relationship**
 
 ```{r}
 ggplot(regression_data, aes(x = log_members, y = rating)) +
@@ -1181,9 +909,30 @@ ggplot(regression_data, aes(x = log_members, y = rating)) +
   theme_minimal()
 ```
 
-### **6.3 Regression Diagnostics**
+## **5.5 Regression Diagnostics**
 
-### 1. Residual Normality Assessment
+### **5.5.1 Residual Normality (Shapiro-Wilk Test)**
+
+#### **Shapiro-Wilk Test**
+
+**Purpose:** Tests for normality of residuals in regression analysis.
+
+**Theoretical Background:** The Shapiro-Wilk test compares the ordered sample values with the expected values from a normal distribution using a weighted linear regression. It's particularly powerful for small to moderate sample sizes.
+
+-   Test statistic: $W = \frac{\left(\sum_{i=1}^{n} a_i x_{(i)}\right)^2}{\sum_{i=1}^{n} (x_i - \bar{x})^2}$\
+    where:
+
+    -   $x_{(i)}$ are the ordered sample values $(x₁ ≤ x₂ ≤ ... ≤ xₙ)$
+
+    -   $a_i$ are constants generated from the means, variances and covariances of the order statistics of a sample from the normal distribution
+
+-   W ranges from 0 to 1, with values close to 1 indicating normality
+
+-   Small values of W lead to rejection of the normality hypothesis
+
+-   Critical values are obtained from Shapiro-Wilk tables or computational algorithms
+
+**When to use:** To test the normality assumption in regression analysis, particularly for sample sizes ≤ 5000.
 
 ```{r}
 # For large datasets, use a random sample for Shapiro-Wilk test
@@ -1211,34 +960,71 @@ qqline(residuals, col = "red", lwd = 2)
 grid()
 ```
 
-### 2. Homoscedasticity Assessment
+### **5.5.2 Homoscedasticity (Breusch-Pagan Test)**
+
+#### **Breusch-Pagan Test**
+
+**Purpose:** Tests for heteroscedasticity (non-constant variance) in regression models.
+
+**Theoretical Background:** The Breusch-Pagan test examines whether the variance of errors is dependent on the values of independent variables. It's based on regressing squared residuals on the original independent variables.
+
+1.  Estimate the original model: $y_i = \beta_0 + \beta_1 x_i + \epsilon_i$
+
+2.  Obtain residuals: $\hat{\epsilon}_i = y_i - \hat{y}_i$
+
+3.  Estimate auxiliary regression: $\hat{\epsilon}_i^2 = \gamma_0 + \gamma_1 x_i + u_i$
+
+4.  Test statistic: $LM = n \times R^2_{auxiliary}$\
+    where $R^2_{auxiliary}$ is the coefficient of determination from the auxiliary regression
+
+5.  Under H₀ (homoscedasticity), $LM ∼ χ²$ with $(p-1)$ degrees of freedom\
+    where $p$ = number of parameters in the auxiliary regression
+
+**When to use:** To test the homoscedasticity assumption in regression analysis.
 
 ```{r}
-# Breusch-Pagan test
-if (!require("lmtest")) install.packages("lmtest")
-library(lmtest)
-
 bp_test <- bptest(lm_model)
-cat("**Breusch-Pagan test for heteroscedasticity:**\n")
-cat("- Test statistic BP =", round(bp_test$statistic, 4), "\n")
-cat("- p-value =", 
-    ifelse(bp_test$p.value < 0.001, "< 0.001", 
-           sprintf("%.4f", bp_test$p.value)), "\n")
-cat("- Interpretation:",
-    ifelse(bp_test$p.value > 0.05, 
-           "Constant variance assumption holds (p > 0.05)",
-           "Heteroscedasticity detected (p < 0.05)"), "\n\n")
 
-# Residuals vs fitted plot
-plot(fitted(lm_model), residuals, 
-     xlab = "Fitted Values", ylab = "Residuals",
-     main = "Residuals vs Fitted Values",
-     pch = 20, cex = 0.5, col = rgb(0, 0, 1, 0.3))
-abline(h = 0, col = "red", lwd = 2)
-grid()
+cat("\nHomoscedasticity Test (Breusch-Pagan):\n")
+cat("- Test statistic (BP):", round(bp_test$statistic, 4), "\n")
+cat("- p-value:", 
+    ifelse(bp_test$p.value < 0.001, "< 0.001", 
+           sprintf("%.6f", bp_test$p.value)), "\n")
+cat("- Conclusion:", 
+    ifelse(bp_test$p.value > 0.05, 
+           "Constant variance assumption holds",
+           "Heteroscedasticity detected"), "\n")
 ```
 
-### 3. Influential Observations Detection
+### **5.5.3 Influential Observations (Cook's Distance)**
+
+#### **Cook's Distance**
+
+**Purpose:** Identifies influential observations in regression analysis that disproportionately affect parameter estimates.
+
+**Theoretical Background:** Cook's distance measures how much the regression coefficients change when a particular observation is omitted. It combines information about leverage (how unusual an observation is in X-space) and residual size.
+
+-   For observation i: $D_i = \frac{\sum_{j=1}^{n} (\hat{y}j - \hat{y}{j(i)})^2}{p \times MSE}$\
+    where:
+
+    -   $\hat{y}_j$ = predicted value for observation j using all data
+
+    -   $\hat{y}_{j(i)}$ = predicted value for observation j when observation i is omitted
+
+    -   $p$ = number of regression parameters (including intercept)
+
+    -   $MSE$ = mean squared error from the full model
+
+-   Alternative formula: $D_i = \frac{r_i^2}{p} \times \frac{h_{ii}}{(1 - h_{ii})^2}$\
+    where:
+
+    -   $r_i$ = standardized residual for observation i
+
+    -   $h_{ii}$ = leverage (diagonal element of hat matrix $H = X(X'X)⁻¹X')$
+
+**Rule of thumb:** Observations with $D_i > \frac{4}{n}$ are considered influential.
+
+**When to use:** To detect influential observations that may distort regression results. Useful for diagnosing outliers and high-leverage points.
 
 ```{r}
 
@@ -1268,133 +1054,89 @@ if (influential_count > 0) {
 }
 ```
 
-## Robustness Checks
+## **5.6 Robustness Checks**
 
 ### 1. Robust Regression (M-estimation)
 
 ```{r}
-if (!require("MASS")) install.packages("MASS")
-library(MASS)
-
 rlm_model <- rlm(rating ~ log_members, data = regression_data)
-cat("**Comparison of coefficients:**\n")
+
+cat("Robustness Checks:\n")
 cat("- OLS estimate for β₁:", round(coef(lm_model)[2], 4), "\n")
-cat("- Robust estimate for β₁:", round(coef(rlm_model)[2], 4), "\n")
+cat("- Robust regression estimate for β₁:", round(coef(rlm_model)[2], 4), "\n")
 cat("- Difference:", round(abs(coef(lm_model)[2] - coef(rlm_model)[2]), 4), "\n")
-cat("- Interpretation:",
+cat("- Conclusion:", 
     ifelse(abs(coef(lm_model)[2] - coef(rlm_model)[2]) < 0.01,
-           "Similar estimates suggest results are robust to outliers.",
-           "Substantial difference indicates sensitivity to outliers."), "\n\n")
+           "Results are robust to outliers",
+           "Results may be sensitive to outliers"), "\n")
 ```
 
-### 2. Nonlinearity Check
+## **5.7 Hypothesis Decision**
 
 ```{r}
 
-poly_model <- lm(rating ~ poly(log_members, 2), data = regression_data)
-poly_summary <- summary(poly_model)
-cat("**Quadratic term test:**\n")
-cat("- Quadratic coefficient:", round(coef(poly_summary)[3, 1], 4), "\n")
-cat("- p-value for quadratic term:", 
-    ifelse(coef(poly_summary)[3, 4] < 0.001, "< 0.001", 
-           sprintf("%.4f", coef(poly_summary)[3, 4])), "\n")
-cat("- R² comparison: Linear =", round(summary_lm$r.squared, 4), 
-    ", Quadratic =", round(poly_summary$r.squared, 4), "\n")
-cat("- Interpretation:",
-    ifelse(coef(poly_summary)[3, 4] < 0.05,
-           "Evidence of nonlinearity (quadratic term is significant).",
-           "No evidence of nonlinearity (linear model is adequate)."), "\n\n")
-```
-
-## **7. Discussion and Conclusions**
-
-**Null Hypothesis (H₀):** $β₁ = 0$ (no linear relationship)
-
-**Alternative Hypothesis (H₁):** $β₁ ≠ 0$ (linear relationship exists)
-
-**Significance level:** $α = 0.05$
-
-```{r}
-if (coef_table[2, 4] < 0.05) {
-  cat("**DECISION:** REJECT H₀\n")
-  cat("**Reason:** p-value", 
-      ifelse(coef_table[2, 4] < 0.001, "< 0.001", 
-             sprintf("= %.4f", coef_table[2, 4])), 
-      "< 0.05\n")
-  cat("**Conclusion:** There is statistically significant evidence of a linear relationship\n")
+alpha <- 0.05
+if (summary_lm$coefficients[2,4] < alpha) {
+  cat("\n**Decision: REJECT H₀**\n")
+  cat("There is statistically significant evidence of a linear relationship\n")
   cat("between anime popularity (log10 of members) and mean rating.\n")
-  
-  cat("\n**Direction of relationship:** POSITIVE (β₁ > 0)\n")
-  cat("**Interpretation:** More popular anime tend to receive higher ratings on average.\n")
-  cat("**Effect size:** R² =", round(summary_lm$r.squared, 4), 
-      sprintf("(%.1f%% of variance in ratings explained by popularity)", 
-              round(summary_lm$r.squared * 100, 1)), "\n")
+  cat("Direction: POSITIVE (β₁ > 0)\n")
+  cat("Interpretation: More popular anime tend to receive higher ratings.\n")
 } else {
-  cat("**DECISION:** FAIL TO REJECT H₀\n")
-  cat("**Reason:** p-value =", sprintf("%.4f", coef_table[2, 4]), "> 0.05\n")
-  cat("**Conclusion:** There is insufficient statistical evidence of a linear relationship\n")
-  cat("between anime popularity and mean rating.\n")
+  cat("\n**Decision: FAIL TO REJECT H₀**\n")
+  cat("There is insufficient evidence of a linear relationship.\n")
 }
 ```
 
-### **7.1 Summary of Findings**
+## **5.8 Summary of Findings for Hypothesis 2**
 
--   Strong positive correlation between log(members) and rating $(r = 0.648)$
+1.  **Correlation:** Strong positive correlation $(r = 0.648, p < 0.001)$
 
--   Linear regression confirms significant positive relationship $(β₁ = 0.6566, p < 0.001)$
+2.  **Regression:** Significant positive relationship $(β₁ = 0.6566, p < 0.001)$
 
--   Popular anime tend to receive higher ratings
+3.  **Effect Size:** $R² = 0.420$ (42.0% of variance explained)
 
-    ```{r}
-    cat("Hypothesis 2 Results:\n")
-    cat("- Correlation: r =", round(cor_test$estimate, 3), 
-        ", p-value", ifelse(cor_test$p.value < 0.001, "< 0.001", 
-                           round(cor_test$p.value, 4)), "\n")
-    cat("- Regression slope (β₁):", round(coef(lm_model)[2], 4), 
-        ", p-value", ifelse(coef_table[2,4] < 0.001, "< 0.001", 
-                           round(coef_table[2,4], 4)), "\n")
-    cat("- R² =", round(summary_lm$r.squared, 4), 
-        sprintf("(%.1f%% variance explained)", round(summary_lm$r.squared * 100, 1)), "\n")
-    ```
+4.  **Practical Meaning:** Each 10-fold increase in popularity predicts 0.66 points higher rating
 
-## **7.2 Limitations and Considerations**
+# **6. Discussion and Conclusions**
 
-1.  **Log transformation assumption:** We assume $log10$ transformation adequately addresses right-skew in popularity distribution.
-2.  **Linearity assumption:** Relationship modeled as linear in log-space.
-3.  **Causation vs correlation:** Association does not imply causation.
-4.  **Omitted variables:** Other factors (genre, year, episodes) not controlled for.
-5.  **Sample representativeness:** Results specific to MyAnimeList dataset.
+## **6.1 Key Findings**
 
-==============================================================
+1.  **Genre significantly affects ratings:** Action anime receive highest ratings (median = 6.88), Music lowest (median = 5.84)
 
-## **8. Executive Summary**
+2.  **Popularity strongly correlates with ratings:** More popular anime tend to receive higher ratings
 
-This research analyzed factors influencing anime popularity using data from 12,294 anime titles and 7.8 million user ratings. Key findings:
+3.  **Effect sizes are meaningful:** Genre explains 12.4% of variance, popularity explains 42.0%
 
-1.  **Genre significantly affects ratings** (Kruskal-Wallis H = 1489.51, p \< 0.001)
-2.  **Action anime receive highest ratings** (median = 6.88), Music lowest (median = 5.84)
-3.  **Popularity strongly correlates with ratings** (r = 0.648, p \< 0.001)
-4.  **Each 10-fold increase in popularity predicts 0.66 higher rating**
+## **6.2 Limitations**
 
-These findings have implications for viewers, creators, and recommendation systems.
+1.  Simplified genre assignment for multi-genre anime
 
-## **9. Practical Implications**
+2.  Unequal sample sizes across genres
 
-1.  **For viewers:** Genre can guide viewing choices
+3.  Potential confounding variables not controlled for
 
-2.  **For creators:** Understanding genre-rating relationships can inform production decisions
+4.  Data limited to MyAnimeList platform
 
-3.  **For platforms:** Popularity metrics can help predict user satisfaction
+## **6.3 Practical Implications**
 
-## **10. Future Research Directions**
+1.  **For viewers:** Genre and popularity can guide viewing choices
 
-1.  Multivariate analysis controlling for confounders
+2.  **For creators:** Understanding these relationships can inform production decisions
+
+3.  **For platforms:** These factors can improve recommendation systems
+
+## **6.4 Future Research Directions**
+
+1.  Multivariate analysis controlling for additional factors
 
 2.  Longitudinal analysis of rating trends
 
-3.  Cross-cultural comparisons using data from different platforms
+3.  Cross-cultural comparisons
 
-## **11. References**
+4.  Investigation of interaction effects between variables
+
+# **7. References**
 
 1.  Kaggle Anime Recommendations Database: <https://www.kaggle.com/datasets/CooperUnion/anime-recommendations-database>
 
